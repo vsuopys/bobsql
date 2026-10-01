@@ -3,6 +3,10 @@
     "Adventure Works (SQL MCP)": {
       "type": "http",
       "url": "http://localhost:5001/mcp"
+    },
+    "wardgeneral-dab": {
+      "type": "http",
+      "url": "http://localhost:5000/mcp"
     }
   }
 }
