@@ -33,13 +33,14 @@
 [CmdletBinding()]
 param(
     [string] $Rg               = 'rg-collierhealth',
-    [string] $Server           = 'collierhealth-17',       # primary logical server
+    [string] $Server           = 'collierhealth-49889',       # primary logical server
     [string] $Database         = 'wardgeneral',            # primary Hyperscale DB
     [string] $ReplicaName      = 'wardgeneral-research',   # named replica DB name
     [double] $MinVcore         = 1,                        # serverless autoscale FLOOR (idles here; no auto-pause on Hyperscale)
     [int]    $MaxVcore         = 8,                        # serverless autoscale CEILING
     [string] $IsolationServer  = '',                       # optional: separate server for student access isolation
-    [int]    $HaReplicas       = 0                          # 0 = cheapest; 1 = add HA to the replica
+    [int]    $HaReplicas       = 0,                         # 0 = cheapest; 1 = add HA to the replica
+    [string] $ServiceObjective = ($env:REPLICA_SLO ?? '')   # e.g. HS_Gen5_2 = PROVISIONED compute instead of serverless
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,9 +50,10 @@ $ErrorActionPreference = 'Stop'
 # region; this script does not create the server so the admin owns that decision.
 $partnerServer = if ($IsolationServer) { $IsolationServer } else { $Server }
 
-Write-Host "=== Creating Hyperscale named replica (serverless) ==="
+$computeDesc = if ($ServiceObjective) { "provisioned $ServiceObjective" } else { "serverless Gen5, $MinVcore-$MaxVcore vCores" }
+Write-Host "=== Creating Hyperscale named replica ($computeDesc) ==="
 Write-Host "  primary   : $Server/$Database"
-Write-Host "  replica   : $partnerServer/$ReplicaName  (serverless Gen5, $MinVcore-$MaxVcore vCores, ha-replicas=$HaReplicas)"
+Write-Host "  replica   : $partnerServer/$ReplicaName  ($computeDesc, ha-replicas=$HaReplicas)"
 Write-Host ""
 
 $haArg = @()
@@ -61,6 +63,9 @@ if ($HaReplicas -gt 0) { $haArg = @('--ha-replicas', $HaReplicas) }
 # "Serverless compute tier" (accessed 2026-07-21). Serverless is set with
 # --compute-model Serverless --family Gen5 --min-capacity <floor> --capacity <ceiling>.
 # On Hyperscale, each named replica autoscales INDEPENDENTLY of the primary.
+# -ServiceObjective HS_Gen5_2 (or $env:REPLICA_SLO) uses fixed provisioned compute instead.
+$computeArgs = if ($ServiceObjective) { @('--service-objective', $ServiceObjective) }
+               else { @('--compute-model', 'Serverless', '--family', 'Gen5', '--min-capacity', $MinVcore, '--capacity', $MaxVcore) }
 az sql db replica create `
     --resource-group $Rg `
     --name $Database `
@@ -68,10 +73,7 @@ az sql db replica create `
     --secondary-type named `
     --partner-database $ReplicaName `
     --partner-server $partnerServer `
-    --compute-model Serverless `
-    --family Gen5 `
-    --min-capacity $MinVcore `
-    --capacity $MaxVcore `
+    @computeArgs `
     @haArg | Out-Null
 
 Write-Host "--- Replica summary ---"

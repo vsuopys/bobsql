@@ -41,10 +41,17 @@ if (-not $env:ADMIN_OBJECT_ID) { throw 'Set ADMIN_OBJECT_ID to the Entra group /
 $AdminObjectId = $env:ADMIN_OBJECT_ID
 $AdminType     = $env:ADMIN_TYPE ?? 'Group'         # User | Group | ServicePrincipal
 
+# Entra-only auth. Some tenants (e.g. MCAPS-governed subscriptions) DENY creating a
+# SQL server without Microsoft Entra-only authentication (policy
+# "AzureSQL_WithoutAzureADOnlyAuthentication_Deny"). ENTRA_ONLY=true creates the
+# server Entra-only (no SQL login at all) — every script in this kit is
+# passwordless, so nothing else changes.
+$EntraOnly = $env:ENTRA_ONLY ?? 'false'
+
 # SQL admin login (mixed auth). Set
 # SQL_ADMIN_PASSWORD in the environment; never hard-code it here.
 $SqlAdminUser = $env:SQL_ADMIN_USER ?? 'wardadmin'
-if (-not $env:SQL_ADMIN_PASSWORD) { throw 'Set SQL_ADMIN_PASSWORD for the mixed-auth SQL admin.' }
+if ($EntraOnly -ne 'true' -and -not $env:SQL_ADMIN_PASSWORD) { throw 'Set SQL_ADMIN_PASSWORD for the mixed-auth SQL admin (or ENTRA_ONLY=true).' }
 $SqlAdminPassword = $env:SQL_ADMIN_PASSWORD
 
 # Hyperscale shape: provisioned, single database, one HA replica, zone
@@ -128,19 +135,23 @@ az group create --name $Rg --location $Loc --tags @Tags -o table
 # OpenAI / Foundry and to Key Vault for TDE customer-managed keys.
 # Changeable later via `az sql server update`.
 Write-Host ""
-Write-Host "--- 2/4 Logical server: $Srv (mixed SQL + Entra auth) ---"
+Write-Host "--- 2/4 Logical server: $Srv ($(if ($EntraOnly -eq 'true') { 'Entra-only auth' } else { 'mixed SQL + Entra auth' })) ---"
 $serverIdentityArgs = @()
 if ($AssignIdentity -eq 'true') {
     $serverIdentityArgs += @('--assign-identity', '--identity-type', $IdentityType)
     if ($UserAssignedIdentityId) { $serverIdentityArgs += @('--user-assigned-identity-id', $UserAssignedIdentityId) }
     if ($PrimaryUamiId)          { $serverIdentityArgs += @('--primary-user-assigned-identity-id', $PrimaryUamiId) }
 }
+$authArgs = @(if ($EntraOnly -eq 'true') {
+    '--enable-ad-only-auth'
+} else {
+    '--admin-user', $SqlAdminUser, '--admin-password', $SqlAdminPassword
+})
 az sql server create `
     --name $Srv `
     --resource-group $Rg `
     --location $Loc `
-    --admin-user $SqlAdminUser `
-    --admin-password $SqlAdminPassword `
+    @authArgs `
     --external-admin-principal-type $AdminType `
     --external-admin-name $AdminDisplayName `
     --external-admin-sid $AdminObjectId `
@@ -156,6 +167,15 @@ az sql server create `
 # broad exposure — disable for production. Gated on ALLOW_AZURE_SERVICES.
 Write-Host ""
 Write-Host "--- 3/4 Firewall rules ---"
+# Governed subscriptions (e.g. MCAPS "AzureSQL_PublicNetwork_Modify") can force
+# publicNetworkAccess=Disabled on create; firewall rules can't be written then.
+# Skip them and use Private Link or a network security perimeter
+# (provision-network-perimeter.ps1) for client access instead.
+$pna = az sql server show -g $Rg -n $Srv --query publicNetworkAccess -o tsv
+if ($pna -ne 'Enabled') {
+    Write-Host "Server publicNetworkAccess=$pna (policy-enforced?) — skipping firewall rules." -ForegroundColor Yellow
+    Write-Host "  Client access: run provision-network-perimeter.ps1 (NSP inbound IP rule) or reach it via Private Link." -ForegroundColor Yellow
+} else {
 if ($AllowAzureServices -eq 'true') {
     az sql server firewall-rule create `
         --resource-group $Rg `
@@ -177,6 +197,7 @@ az sql server firewall-rule create `
     --start-ip-address $MyIp `
     --end-ip-address $MyIp `
     -o table
+}
 
 # ---------- 4. The Hyperscale database — the headline command ----------------
 # A single `az sql db create` deploys the Hyperscale database. The teaching

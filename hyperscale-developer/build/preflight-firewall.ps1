@@ -4,7 +4,7 @@
     the Azure SQL server firewall.
 
     Why: the web app and Data API Builder both connect to
-    collierhealth-17.database.windows.net with Active Directory Default. If the
+    collierhealth-49889.database.windows.net with Active Directory Default. If the
     venue / hotel / conference public IP is not in the server firewall, every
     connection fails at login (SQL error 40615, "Client with IP address '...'
     is not allowed to access the server"). This detects the current public IP
@@ -29,8 +29,9 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$Server = 'collierhealth-17',
+    [string]$Server = 'collierhealth-49889',
     [string]$ResourceGroup = 'rg-collierhealth',
+    [string]$Database = 'wardgeneral',   # NSP login test target (logins to master are denied under an NSP)
     [string]$RuleName,
     [string]$Cidr,
     [switch]$Yes
@@ -78,6 +79,57 @@ Write-Host "Azure: $($acct.name) / $($acct.user.name)" -ForegroundColor DarkGray
 # -- Determine the target IP range to authorize ------------------------------
 # Default: the detected /32. With -Cidr: the whole egress range (for corpnet /
 # NAT pools where the outbound IP rotates and a /32 can't work).
+# Governed subscriptions may force publicNetworkAccess off; when the server is
+# SecuredByPerimeter, inbound access is an NSP access rule, not a firewall rule.
+$pna = az sql server show --resource-group $ResourceGroup --name $Server --query publicNetworkAccess -o tsv
+if ($pna -eq 'SecuredByPerimeter') {
+    Write-Host "$Server is SecuredByPerimeter — inbound access is a network security perimeter rule, not a firewall rule." -ForegroundColor Cyan
+    # Test a real Entra login first: with Global Secure Access / corpnet tunnels the
+    # IP that SQL sees (CONNECTIONPROPERTY('client_net_address')) is NOT the ipify IP.
+    $seen = $null
+    try {
+        $tok = az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
+        $cn = [Microsoft.Data.SqlClient.SqlConnection]::new("Server=tcp:$Server.database.windows.net,1433;Database=$Database;Encrypt=True;Connect Timeout=20;Pooling=false")
+    } catch {
+        Add-Type -AssemblyName System.Data
+        $cn = [System.Data.SqlClient.SqlConnection]::new("Server=tcp:$Server.database.windows.net,1433;Database=$Database;Encrypt=True;Connect Timeout=20;Pooling=false")
+    }
+    try {
+        $cn.AccessToken = $tok; $cn.Open()
+        $cmd = $cn.CreateCommand(); $cmd.CommandText = "SELECT CAST(CONNECTIONPROPERTY('client_net_address') AS varchar(64))"
+        $seen = $cmd.ExecuteScalar()
+    } catch { Write-Host "  login test: $($_.Exception.Message)" -ForegroundColor DarkYellow }
+    finally { $cn.Dispose() }
+    if ($seen -and -not $Cidr) {
+        Write-Host "OK: login succeeded; the server sees this client as $seen (already allowed by the perimeter)." -ForegroundColor Green
+        Write-Host "    Egress rotating (GSA/corpnet)? Re-run a few times, or allow the pool with -Cidr a.b.c.0/24." -ForegroundColor DarkGray
+        exit 0
+    }
+    $nspArgs = @{ Rg = $ResourceGroup; Server = $Server; InboundOnly = $true }
+    $want = if ($Cidr) { $Cidr } else { "$((Invoke-RestMethod -Uri 'https://api.ipify.org' -TimeoutSec 10).Trim())/32" }
+    $sub = az account show --query id -o tsv
+    $rulesUrl = "https://management.azure.com/subscriptions/$sub/resourceGroups/$ResourceGroup/providers/Microsoft.Network/networkSecurityPerimeters/nsp-collierhealth/profiles/wardgeneral/accessRules?api-version=2024-07-01"
+    $have = az rest --method get --url $rulesUrl --query "value[?properties.direction=='Inbound'].properties.addressPrefixes[]" -o tsv 2>$null
+    if ($have -contains $want) {
+        Write-Host "$want is already in the perimeter inbound rules, but login still failed." -ForegroundColor Yellow
+        Write-Host "  The IP SQL sees differs (Global Secure Access / corpnet tunnel). Authorize that egress pool with -Cidr." -ForegroundColor Yellow
+        exit 6
+    }
+    $nspArgs['Cidr'] = $want
+    if (-not $Yes) {
+        $answer = Read-Host "Add/update the NSP inbound rule for this client now? [y/N]"
+        if ($answer -notmatch '^(y|yes)$') { Write-Warning "Skipped."; exit 1 }
+    }
+    if ($PSCmdlet.ShouldProcess("$Server NSP", 'ensure inbound rule')) {
+        & (Join-Path $PSScriptRoot 'deploy' 'provision-network-perimeter.ps1') @nspArgs
+    }
+    exit 0
+}
+if ($pna -eq 'Disabled') {
+    Write-Warning "$Server has publicNetworkAccess=Disabled — only Private Link clients can connect. Run deploy/provision-network-perimeter.ps1 for laptop access."
+    exit 5
+}
+
 if ($Cidr) {
     try { $range = Convert-CidrToRange $Cidr }
     catch { Write-Error $_.Exception.Message; exit 4 }
