@@ -12,7 +12,7 @@ Status legend: ✅ written · 🚧 to draft · 🎥 recording fallback needed
 | # | Check | How |
 |---|---|---|
 | 1 | `az login` valid | `az account show` (passwordless auth for app + DAB) |
-| 2 | **This client's IP allowed** on `collierhealth-17` | `./build/preflight-firewall.ps1` — detects your public IP and **prompts** before adding one named firewall rule (never opens `0.0.0.0`). `run.ps1` calls it automatically; `-Yes` = no prompt, `-SkipFirewall` on `run.ps1` bypasses it. **A new venue/hotel IP is the #1 "can't connect on stage" cause.** ⚠️ **Rotating egress (corpnet/NAT):** if the server rejects with **40615** despite a `/32` rule, your outbound IP rotates across a range (the IP `ipify` sees ≠ the IP SQL sees). Authorize the whole range: `./build/preflight-firewall.ps1 -Cidr 131.107.0.0/16 -Yes`. |
+| 2 | **This client's IP allowed** on `collierhealth-49889` | `./build/preflight-firewall.ps1` — detects your public IP and **prompts** before adding one named firewall rule (never opens `0.0.0.0`). `run.ps1` calls it automatically; `-Yes` = no prompt, `-SkipFirewall` on `run.ps1` bypasses it. **A new venue/hotel IP is the #1 "can't connect on stage" cause.** ⚠️ **Rotating egress (corpnet/NAT):** if the server rejects with **40615** despite a `/32` rule, your outbound IP rotates across a range (the IP `ipify` sees ≠ the IP SQL sees). Authorize the whole range: `./build/preflight-firewall.ps1 -Cidr 131.107.0.0/16 -Yes`. With **Global Secure Access** on, SQL sees the GSA egress pool, not ipify's IP — see [MY-ENVIRONMENT.md](MY-ENVIRONMENT.md). |
 | 3 | App **and** DAB running | `./build/run.ps1` → starts **both**: DAB on http://localhost:5000 (REST/GraphQL/MCP) *and* the app on https://localhost:7170. Wait for `DAB is up on :5000` then the browser opens. (`shutdown.ps1` stops both; `-NoDab` for app-only.) |
 | 4 | MCP server started in VS Code | open [.vscode/mcp.json](../../.vscode/mcp.json) → **Start** on `wardgeneral-dab` (shows "12 tools") |
 | 5 | Copilot in **Agent** mode | trigger one tool call so the **Allow** dialog is pre-dismissed |
@@ -52,7 +52,7 @@ what lets the *same* procedures later serve DAB and an AI agent unchanged.
 | 3 | **Show the GitHub repo + structure** — `presentations/hyperscale-developer/build/` (app `src/`, `dab/`, `sql/`) | It's an ordinary repo: a Blazor app + DAL, a DAB config, and a folder of plain `.sql`. Nothing Hyperscale-specific in the code. |
 | 4 | **MSSQL extension → Schema Designer, then the Copilot icon** — connect to `wardgeneral`, open the **Schema Designer** (visualize + design the schema), then click the **Copilot icon** in the designer and let it **describe what it sees** | Copilot reads the live schema and calls out the good stuff on its own — **native `json` columns** (`InsuranceJson`, `IntakeJson`, `ResultJson`, `FindingsJson`), the **`vector`** embedding table, and the **AI-assistance / ledger** tables. "It's an ordinary SQL Server database — and look what the engine already does." Previews the natural-language theme that pays off in 🤖 Modernize. |
 | 5 | **Ask Copilot: "what is `ChartRepository`?"** (and let it tie schema → app code) | The answer is the whole thesis in one shot: the DAL calls **only** `clinical.*` stored procedures (no ORM, no ad-hoc SQL), and those *same* procs become DAB's REST/GraphQL/MCP tools and the AI agent's tools, unchanged. Optionally open **`04-procedures.sql`** to show `GetPatientChart`/`SearchEncounters` behind it. |
-| 6 | **Explore the Azure portal** — `wardgeneral` on `collierhealth-17` → Overview | It's **Hyperscale** (HS_Gen5_8): compute + storage + replicas — "the app you just saw runs on *this*." |
+| 6 | **Explore the Azure portal** — `wardgeneral` on `collierhealth-49889` → Overview | It's **Hyperscale** (HS_Gen5_2 in this environment; Bob's default is HS_Gen5_8): compute + storage + replicas — "the app you just saw runs on *this*." |
 | 7 | On the portal, **call out Zone Redundancy = On** and **1 HA replica** | **Create-time choices** — both were decided at deploy and are **immutable** (no `az sql db update` for zone redundancy; you'd rebuild the DB to change it). Sets up "Make it HA." |
 
 **⚠️ Live only — no recording fallback.** The app tour, the repo/schema walk, and
@@ -93,7 +93,7 @@ sees which rows. The app just says *who's asking*; the engine does the filtering
 > It's the same `SESSION_CONTEXT` value flowing app → engine.
 
 **Slide-only (named, not demoed):**
-- **TDE — versionless customer-managed key** (BYOK, auto-rotate; `kv-collierhealth-tde`).
+- **TDE — versionless customer-managed key** (BYOK, auto-rotate; `kv-collierhealth-49889`).
 - **Private Link** — `pe-collierhealth-sql`, private endpoint in the VNet; public path can be denied for private-only.
 - **Microsoft Defender for SQL** — threat protection / vulnerability assessment.
 
@@ -118,7 +118,7 @@ demand — the app keeps one connection string."*
 
 | # | Do | The point |
 |---|---|---|
-| 1 | 🌊 **Kick the surge** — `./Run-ReadSurge.ps1 -DurationSeconds 60 -Report` (from `utilities/sqlsim/read-surge/`) | Read-only load through the app's real procs (`ops.vBedCensus`, `GetPatientChart`, `SearchEncounters`) hits the **primary** compute. ~3,300 reads / 10s on 8 vCores. |
+| 1 | 🌊 **Kick the surge** — `./Run-ReadSurge.ps1 -DurationSeconds 60 -Report` (from `utilities/sqlsim/read-surge/`) | Read-only load through the app's real procs (`ops.vBedCensus`, `GetPatientChart`, `SearchEncounters`) hits the **primary** compute. ~3,300 reads / 10s on 8 vCores (expect fewer on this environment's 2 vCores). |
 | 2 | Show the **querystats HTML report** that auto-opens | Per-query **server CPU** + logical reads + throughput — *"here's the compute this load burned."* |
 | 3 | Portal → **compute slider** (2 → 192 vCores) | **Online rescale**, constant time regardless of data size; a brief reconnect at cutover is **hidden by the app's retry logic** (→ Make it HA). Pull it, kick it, move on — don't wait the single-digit minutes. |
 | 4 | Portal → **no storage slider** | Storage **grows automatically** to 128 TB, billed on actual allocation — nothing to pre-provision or manage. *"Compute you dial; storage just grows."* |
@@ -194,7 +194,7 @@ Four movements, climbing from T-SQL to an AI agent — all against one Hyperscal
 
 | # | Do | The point |
 |---|---|---|
-| 1 | In the app open **Research** → semantic search over the 60k notes — [Research.razor](build/src/WardGeneral.Web/Components/Pages/Research.razor) | Vector search in the app, running on the **serverless named replica** — the isolated read endpoint from Scale. |
+| 1 | In the app open **Research** → semantic search over the 60k notes — [Research.razor](build/src/WardGeneral.Web/Components/Pages/Research.razor) | Vector search in the app, running on the **named replica** (provisioned HS_Gen5_2 here; serverless in Bob's default) — the isolated read endpoint from Scale. |
 | 2 | Show the **embedding T-SQL** — [06-ai-embeddings.sql](build/sql/06-ai-embeddings.sql): `CREATE EXTERNAL MODEL`, `ClinicalNoteEmbeddings VECTOR(3072, float16)`, `AI_GENERATE_EMBEDDINGS`, `CREATE VECTOR INDEX … diskann` | Model, vector type, embeddings, and the DiskANN index — all T-SQL. |
 | 3 | Show the **search proc** — `clinical.SearchSimilarNotes` in [08-research-vector-search.sql](build/sql/08-research-vector-search.sql): `AI_GENERATE_EMBEDDINGS(@q) … VECTOR_SEARCH … SELECT TOP (N) WITH APPROXIMATE` | It **embeds *and* searches on the replica** — no separate vector store, no load on the primary. |
 
