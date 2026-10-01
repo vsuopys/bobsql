@@ -286,3 +286,9 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+
+# Ward General local secrets / logs (vsuopys env)
+hyperscale-developer/build/.env.local
+hyperscale-developer/build/**/*.log
+hyperscale-developer/build/deploy/diag-results.txt
+
