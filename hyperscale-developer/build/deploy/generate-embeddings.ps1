@@ -50,17 +50,23 @@ function Log($msg) {
 $chunkSql = @"
 SET NOCOUNT ON;
 DECLARE @b INT = $BatchSize;
+-- Stage the batch first: if AI_GENERATE_EMBEDDINGS sits in the same query as the
+-- NOT EXISTS / TOP, the optimizer may evaluate it for rows that are later filtered
+-- out (already-embedded notes), wasting model calls and stalling the batch.
+SELECT TOP (@b) n.NoteId, n.NoteText
+INTO #batch
+FROM clinical.ClinicalNote AS n
+WHERE n.NoteId % $Shards = $Shard
+  AND NOT EXISTS (SELECT 1 FROM clinical.ClinicalNoteEmbeddings e WHERE e.NoteId = n.NoteId);
 INSERT INTO clinical.ClinicalNoteEmbeddings (NoteId, Embedding)
 SELECT NoteId, emb
 FROM (
-    SELECT TOP (@b)
-        n.NoteId,
-        AI_GENERATE_EMBEDDINGS(n.NoteText USE MODEL WardGeneralEmbeddingModel) AS emb
-    FROM clinical.ClinicalNote AS n
-    WHERE n.NoteId % $Shards = $Shard
-      AND NOT EXISTS (SELECT 1 FROM clinical.ClinicalNoteEmbeddings e WHERE e.NoteId = n.NoteId)
+    SELECT b.NoteId,
+           AI_GENERATE_EMBEDDINGS(b.NoteText USE MODEL WardGeneralEmbeddingModel) AS emb
+    FROM #batch AS b
 ) AS x
 WHERE x.emb IS NOT NULL;      -- skip throttled (NULL) rows; retried next pass
+DROP TABLE #batch;
 DECLARE @done INT = (SELECT COUNT(*) FROM clinical.ClinicalNoteEmbeddings WHERE NoteId % $Shards = $Shard);
 DECLARE @total INT = (SELECT COUNT(*) FROM clinical.ClinicalNote WHERE NoteId % $Shards = $Shard);
 PRINT CONCAT('PROGRESS ', @done, ' / ', @total);
