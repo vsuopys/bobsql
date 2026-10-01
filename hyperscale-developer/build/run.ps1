@@ -19,7 +19,7 @@
 param(
     [string]$HttpsUrl = 'https://localhost:7170',
     [string]$HttpUrl = 'http://localhost:5170',
-    [string]$Server = 'collierhealth-17.database.windows.net',
+    [string]$Server = 'collierhealth-49889.database.windows.net',
     [string]$Database = 'wardgeneral',
     [switch]$NoBrowser,
     [switch]$OpenOnly,
@@ -99,7 +99,7 @@ if (-not $NoDab) {
         Write-Host "Starting Data API Builder (REST/GraphQL/MCP) on http://localhost:5000 ..." -ForegroundColor Cyan
         Write-Host "  (first start can take ~60s: Entra sign-in + reflecting 13 procs; logs -> $dabLog)" -ForegroundColor DarkGray
         # Run hidden with output redirected to a log file — no scary popup window.
-        $dabProc = Start-Process -FilePath 'dab' -ArgumentList @('start', '-c', $dabConfig) `
+        $dabProc = Start-Process -FilePath 'dab' -ArgumentList @('start', '-c', ('"{0}"' -f $dabConfig)) `
             -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput $dabLog -RedirectStandardError $dabErr
         $dabUp = $false

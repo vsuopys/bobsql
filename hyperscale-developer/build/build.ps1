@@ -43,6 +43,13 @@ if (Get-Command dab -ErrorAction SilentlyContinue) {
 else {
     Write-Host "Installing DAB CLI (Microsoft.DataApiBuilder)..." -ForegroundColor Yellow
     dotnet tool install --global Microsoft.DataApiBuilder
+    # The DAB tool package has no win-arm64 RID; on Windows on ARM install it with the
+    # x64 .NET host (runs under emulation) if it's present.
+    $x64Dotnet = Join-Path $env:ProgramFiles 'dotnet\x64\dotnet.exe'
+    if ($LASTEXITCODE -ne 0 -and [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64' -and (Test-Path $x64Dotnet)) {
+        Write-Host "  win-arm64: retrying with the x64 .NET host ($x64Dotnet)..." -ForegroundColor Yellow
+        & $x64Dotnet tool install --global Microsoft.DataApiBuilder
+    }
     if ($LASTEXITCODE -ne 0) { throw "DAB CLI install failed (needed for the chat/agent)." }
 }
 

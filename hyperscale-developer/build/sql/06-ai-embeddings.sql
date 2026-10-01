@@ -65,11 +65,11 @@ GO
 /* (Entra-only posture — no API key on disk. Grant it "Cognitive Services       */
 /*  OpenAI User" on the Foundry resource.)                                       */
 IF EXISTS (SELECT 1 FROM sys.database_scoped_credentials
-           WHERE name = 'https://collierhealth-ai.openai.azure.com/')
-    DROP DATABASE SCOPED CREDENTIAL [https://collierhealth-ai.openai.azure.com/];
+           WHERE name = 'https://collierhealth-49889-ai.openai.azure.com/')
+    DROP DATABASE SCOPED CREDENTIAL [https://collierhealth-49889-ai.openai.azure.com/];
 GO
 
-CREATE DATABASE SCOPED CREDENTIAL [https://collierhealth-ai.openai.azure.com/]
+CREATE DATABASE SCOPED CREDENTIAL [https://collierhealth-49889-ai.openai.azure.com/]
 WITH IDENTITY = 'Managed Identity',
      SECRET   = '{"resourceid":"https://cognitiveservices.azure.com"}';
 GO
@@ -81,11 +81,11 @@ GO
 
 CREATE EXTERNAL MODEL WardGeneralEmbeddingModel
 WITH (
-    LOCATION   = 'https://collierhealth-ai.openai.azure.com/openai/deployments/text-embedding-3-large/embeddings?api-version=2024-08-01-preview',
+    LOCATION   = 'https://collierhealth-49889-ai.openai.azure.com/openai/deployments/text-embedding-3-large/embeddings?api-version=2024-08-01-preview',
     API_FORMAT = 'Azure OpenAI',
     MODEL_TYPE = EMBEDDINGS,
     MODEL      = 'text-embedding-3-large',
-    CREDENTIAL = [https://collierhealth-ai.openai.azure.com/],
+    CREDENTIAL = [https://collierhealth-49889-ai.openai.azure.com/],
     /* Auto-retry transient throttling (HTTP 429) up to 10x — essential at volume  */
     /* when many AI_GENERATE_EMBEDDINGS calls hit the deployment's per-minute quota.*/
     PARAMETERS = '{"sql_rest_options":{"retry_count":10}}'
@@ -125,14 +125,20 @@ GO
 PRINT '=== Generating embeddings for clinical.ClinicalNote ==='
 GO
 
-INSERT INTO clinical.ClinicalNoteEmbeddings (NoteId, Embedding)
-SELECT
-    n.NoteId,
-    AI_GENERATE_EMBEDDINGS(n.NoteText USE MODEL WardGeneralEmbeddingModel)
-FROM clinical.ClinicalNote AS n
-WHERE NOT EXISTS (
-        SELECT 1 FROM clinical.ClinicalNoteEmbeddings e WHERE e.NoteId = n.NoteId
-      );
+/* Guard: only run the one-shot INSERT for a small note set. On the full seed    */
+/* (~60k notes) skip it and let generate-embeddings.ps1 do the work in chunks —  */
+/* otherwise this single statement runs for hours and dies at token expiry.      */
+IF (SELECT COUNT(*) FROM clinical.ClinicalNote) <= 5000
+    INSERT INTO clinical.ClinicalNoteEmbeddings (NoteId, Embedding)
+    SELECT
+        n.NoteId,
+        AI_GENERATE_EMBEDDINGS(n.NoteText USE MODEL WardGeneralEmbeddingModel)
+    FROM clinical.ClinicalNote AS n
+    WHERE NOT EXISTS (
+            SELECT 1 FROM clinical.ClinicalNoteEmbeddings e WHERE e.NoteId = n.NoteId
+          );
+ELSE
+    PRINT '  Large note corpus — skipping one-shot embed; run deploy/generate-embeddings.ps1 next.';
 GO
 
 DECLARE @n INT = (SELECT COUNT(*) FROM clinical.ClinicalNoteEmbeddings);

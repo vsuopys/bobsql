@@ -27,15 +27,19 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Server    = 'collierhealth-17.database.windows.net',
+    [string] $Server    = 'collierhealth-49889.database.windows.net',
     [string] $Database  = 'wardgeneral',
     [int]    $BatchSize = 2000,
-    [string] $SqlSim    = 'C:\bwsql\sqlsimtools\sqlsim\build\x64\Release\sqlsim.exe',
-    [string] $LogPath   = (Join-Path $PSScriptRoot 'embeddings-progress.log')
+    [string] $SqlSim    = (Join-Path $PSScriptRoot '..' '..' 'utilities' 'sqlsim' 'sqlsim.exe'),
+    [string] $LogPath   = (Join-Path $PSScriptRoot 'embeddings-progress.log'),
+    [int]    $Shards    = 1,      # >1: run several copies in parallel, one per -Shard (NoteId % Shards)
+    [int]    $Shard     = 0
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $SqlSim)) { throw "sqlsim not found at $SqlSim" }
+if ($Shard -lt 0 -or $Shard -ge $Shards) { throw "-Shard must be 0..$($Shards-1)" }
+if ($Shards -gt 1) { $LogPath = $LogPath -replace '\.log$', ".shard$Shard.log" }
 
 function Log($msg) {
     $line = "{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg
@@ -53,14 +57,15 @@ FROM (
         n.NoteId,
         AI_GENERATE_EMBEDDINGS(n.NoteText USE MODEL WardGeneralEmbeddingModel) AS emb
     FROM clinical.ClinicalNote AS n
-    WHERE NOT EXISTS (SELECT 1 FROM clinical.ClinicalNoteEmbeddings e WHERE e.NoteId = n.NoteId)
+    WHERE n.NoteId % $Shards = $Shard
+      AND NOT EXISTS (SELECT 1 FROM clinical.ClinicalNoteEmbeddings e WHERE e.NoteId = n.NoteId)
 ) AS x
 WHERE x.emb IS NOT NULL;      -- skip throttled (NULL) rows; retried next pass
-DECLARE @done INT = (SELECT COUNT(*) FROM clinical.ClinicalNoteEmbeddings);
-DECLARE @total INT = (SELECT COUNT(*) FROM clinical.ClinicalNote);
+DECLARE @done INT = (SELECT COUNT(*) FROM clinical.ClinicalNoteEmbeddings WHERE NoteId % $Shards = $Shard);
+DECLARE @total INT = (SELECT COUNT(*) FROM clinical.ClinicalNote WHERE NoteId % $Shards = $Shard);
 PRINT CONCAT('PROGRESS ', @done, ' / ', @total);
 "@
-$chunkFile = Join-Path $env:TEMP 'wg-embed-chunk.sql'
+$chunkFile = Join-Path $env:TEMP "wg-embed-chunk-$Shard.sql"
 Set-Content -Path $chunkFile -Value $chunkSql -Encoding UTF8
 
 function Get-DbToken {
@@ -96,7 +101,7 @@ function Test-Transient([string]$text) {
             $text -match 'getaddrinfo failed')
 }
 
-Log "=== Embedding run started (batch=$BatchSize) ==="
+Log "=== Embedding run started (batch=$BatchSize, shard $Shard of $Shards) ==="
 $stall = 0        # genuine no-forward-progress passes (throttle / endpoint down)
 $transient = 0    # consecutive network / token errors (NOT counted as stalls)
 $last  = -1
@@ -142,14 +147,16 @@ if ($last -ge 100 -or $done -ge 100) {
     Log "=== Building DiskANN vector index (if not present) ==="
     $idxSql = @"
 SET QUOTED_IDENTIFIER ON; SET ANSI_NULLS ON; SET ARITHABORT ON;
+-- Only once the WHOLE corpus is embedded (other shards may still be inserting).
 IF (SELECT COUNT(*) FROM clinical.ClinicalNoteEmbeddings) >= 100
+   AND ($Shards = 1 OR (SELECT COUNT(*) FROM clinical.ClinicalNoteEmbeddings) >= (SELECT COUNT(*) FROM clinical.ClinicalNote))
    AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'VIX_ClinicalNoteEmbeddings_Embedding')
     CREATE VECTOR INDEX VIX_ClinicalNoteEmbeddings_Embedding
     ON clinical.ClinicalNoteEmbeddings (Embedding)
     WITH (METRIC = 'cosine', TYPE = 'diskann');
 PRINT 'Index step complete.';
 "@
-    $idxFile = Join-Path $env:TEMP 'wg-embed-index.sql'
+    $idxFile = Join-Path $env:TEMP "wg-embed-index-$Shard.sql"
     Set-Content -Path $idxFile -Value $idxSql -Encoding UTF8
     $token = Get-DbToken
     if ($token) { & $SqlSim -S $Server -d $Database -T $token -N s -i $idxFile 2>&1 | Out-String | Write-Host }

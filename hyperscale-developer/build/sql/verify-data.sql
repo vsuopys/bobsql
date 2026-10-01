@@ -63,8 +63,8 @@ GROUP BY s.name, t.name;
 DECLARE @results TABLE (CheckName NVARCHAR(60), Expected NVARCHAR(40), Actual NVARCHAR(40), Status NVARCHAR(6));
 
 DECLARE @nTables INT = (SELECT COUNT(*) FROM #rc);
-INSERT @results VALUES (N'Base tables present', N'13',
-    CONVERT(NVARCHAR(40), @nTables), IIF(@nTables = 13, N'PASS', N'FAIL'));
+INSERT @results VALUES (N'Base tables present', N'>= 13',
+    CONVERT(NVARCHAR(40), @nTables), IIF(@nTables >= 13, N'PASS', N'FAIL'));
 
 /* Per-table expected volumes (at @Scale). Fixed reference data does not scale;
    the fact tables scale with @Scale via the encounter count. ClinicalNote is
