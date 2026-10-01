@@ -106,7 +106,7 @@ for the agent surface; add step 9 for RLS.
 **Tear down (local + billable Azure):** `build/teardown.ps1` stops the app/DAB and
 cleans build artifacts (local only — never the shared DB). The always-on billable
 resource to remember is the APIM gateway:
-`az apim delete -n collierhealth-ai-gateway -g rg-collierhealth --yes --no-wait`.
+`az apim delete -n collierhealth-49889-ai-gateway -g rg-collierhealth --yes --no-wait`.
 
 
 ## Source material

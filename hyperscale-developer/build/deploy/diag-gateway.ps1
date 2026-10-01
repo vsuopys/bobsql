@@ -24,14 +24,14 @@ param(
     [ValidateSet('bare','tl','metric','all','cs')][string]$Variant = 'bare',
     [int]    $EncounterId   = 249,
     [int]    $Times         = 2,
-    [string] $SubscriptionId= '0efc44aa-c965-420f-aac4-fff305dbcc97',
+    [string] $SubscriptionId= '88a1feda-07e6-4bf9-9d09-6ea5ec00b3bf',
     [string] $ResourceGroup = 'rg-collierhealth',
-    [string] $ApimName      = 'collierhealth-ai-gateway',
-    [string] $SqlServerName  = 'collierhealth-17',
+    [string] $ApimName      = 'collierhealth-49889-ai-gateway',
+    [string] $SqlServerName  = 'collierhealth-49889',
     [string] $TokenAudience  = 'https://cognitiveservices.azure.com',
-    [string] $Server         = 'collierhealth-17.database.windows.net',
+    [string] $Server         = 'collierhealth-49889.database.windows.net',
     [string] $Database       = 'wardgeneral',
-    [string] $SqlSim         = 'C:\bwsql\presentations\hyperscale-developer\utilities\sqlsim\sqlsim.exe'
+    [string] $SqlSim         = (Join-Path $PSScriptRoot '..' '..' 'utilities' 'sqlsim' 'sqlsim.exe')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,7 +46,7 @@ $sqlAppId  = az ad sp show --id $sqlPrin --query appId -o tsv
 $auth    = "<validate-azure-ad-token tenant-id=`"$tenantId`"><client-application-ids><application-id>$sqlAppId</application-id></client-application-ids><audiences><audience>$TokenAudience</audience></audiences></validate-azure-ad-token>"
 $backend = "<set-backend-service backend-id=`"gpt5-backend`" /><authentication-managed-identity resource=`"https://cognitiveservices.azure.com`" />"
 $tl      = "<azure-openai-token-limit tokens-per-minute=`"10000`" counter-key=`"wardgeneral-gpt5`" estimate-prompt-tokens=`"true`" tokens-consumed-header-name=`"x-tokens-consumed`" remaining-tokens-header-name=`"x-tokens-remaining`" />"
-$metric  = "<azure-openai-emit-token-metric namespace=`"collierhealth-ai-gateway`"><dimension name=`"API`" value=`"@(context.Api.Name)`" /><dimension name=`"Deployment`" value=`"gpt-5`" /><dimension name=`"Operation`" value=`"ClinicalAssistance`" /></azure-openai-emit-token-metric>"
+$metric  = "<azure-openai-emit-token-metric namespace=`"collierhealth-49889-ai-gateway`"><dimension name=`"API`" value=`"@(context.Api.Name)`" /><dimension name=`"Deployment`" value=`"gpt-5`" /><dimension name=`"Operation`" value=`"ClinicalAssistance`" /></azure-openai-emit-token-metric>"
 $cs      = "<llm-content-safety backend-id=`"contentsafety-backend`" shield-prompt=`"true`" enforce-on-completions=`"true`"><categories output-type=`"FourSeverityLevels`"><category name=`"Hate`" threshold=`"2`" /><category name=`"Sexual`" threshold=`"2`" /><category name=`"SelfHarm`" threshold=`"2`" /><category name=`"Violence`" threshold=`"2`" /></categories></llm-content-safety>"
 
 $inner = switch ($Variant) {

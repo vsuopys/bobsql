@@ -237,7 +237,7 @@ Respond with ONLY a JSON object. "triage_flag" MUST be exactly one word — one 
     }';
 
     DECLARE @chatUrl NVARCHAR(500) =
-        N'https://collierhealth-ai.openai.azure.com/openai/deployments/'
+        N'https://collierhealth-49889-ai.openai.azure.com/openai/deployments/'
         + @ModelDeployment
         + N'/chat/completions?api-version=2025-04-01-preview';
 
@@ -256,7 +256,7 @@ Respond with ONLY a JSON object. "triage_flag" MUST be exactly one word — one 
         EXEC @retval = sp_invoke_external_rest_endpoint
             @url        = @chatUrl,
             @method     = 'POST',
-            @credential = [https://collierhealth-ai.openai.azure.com/],
+            @credential = [https://collierhealth-49889-ai.openai.azure.com/],
             @payload    = @payload,
             @timeout    = 120,
             @response   = @response OUTPUT;

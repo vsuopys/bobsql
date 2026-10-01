@@ -17,7 +17,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Server   = 'collierhealth-17.database.windows.net',
+    [string]$Server   = 'collierhealth-49889.database.windows.net',
     [string]$Database = 'wardgeneral',
     [string]$Config   = (Join-Path $PSScriptRoot 'dab-config.json')
 )

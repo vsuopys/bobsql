@@ -51,11 +51,11 @@ GO
 /* header — no key. Same pattern 06/07 use for Foundry. The credential NAME must be */
 /* the gateway host (more generic than the request URL used in the proc below).     */
 IF EXISTS (SELECT 1 FROM sys.database_scoped_credentials
-           WHERE name = 'https://collierhealth-ai-gateway.azure-api.net/')
-    DROP DATABASE SCOPED CREDENTIAL [https://collierhealth-ai-gateway.azure-api.net/];
+           WHERE name = 'https://collierhealth-49889-ai-gateway.azure-api.net/')
+    DROP DATABASE SCOPED CREDENTIAL [https://collierhealth-49889-ai-gateway.azure-api.net/];
 GO
 
-CREATE DATABASE SCOPED CREDENTIAL [https://collierhealth-ai-gateway.azure-api.net/]
+CREATE DATABASE SCOPED CREDENTIAL [https://collierhealth-49889-ai-gateway.azure-api.net/]
 WITH IDENTITY = 'Managed Identity',
      SECRET   = '{"resourceid":"https://cognitiveservices.azure.com"}';   -- first-party audience; the SAME token the direct Foundry path uses (06/07). No app registration.
 GO
@@ -211,14 +211,14 @@ Respond with ONLY a JSON object. "triage_flag" MUST be exactly one word — one 
     BEGIN
         /* DB -> APIM (server managed identity) -> gpt-5 (APIM managed identity). */
         DECLARE @gatewayUrl NVARCHAR(500) =
-            N'https://collierhealth-ai-gateway.azure-api.net/openai/deployments/'
+            N'https://collierhealth-49889-ai-gateway.azure-api.net/openai/deployments/'
             + @ModelDeployment
             + N'/chat/completions?api-version=2025-04-01-preview';
 
         EXEC @retval = sp_invoke_external_rest_endpoint
             @url        = @gatewayUrl,
             @method     = 'POST',
-            @credential = [https://collierhealth-ai-gateway.azure-api.net/],
+            @credential = [https://collierhealth-49889-ai-gateway.azure-api.net/],
             @payload    = @payload,
             @timeout    = 120,
             @response   = @response OUTPUT;
@@ -227,14 +227,14 @@ Respond with ONLY a JSON object. "triage_flag" MUST be exactly one word — one 
     BEGIN
         /* DB -> gpt-5 directly (server managed identity). */
         DECLARE @directUrl NVARCHAR(500) =
-            N'https://collierhealth-ai.openai.azure.com/openai/deployments/'
+            N'https://collierhealth-49889-ai.openai.azure.com/openai/deployments/'
             + @ModelDeployment
             + N'/chat/completions?api-version=2025-04-01-preview';
 
         EXEC @retval = sp_invoke_external_rest_endpoint
             @url        = @directUrl,
             @method     = 'POST',
-            @credential = [https://collierhealth-ai.openai.azure.com/],
+            @credential = [https://collierhealth-49889-ai.openai.azure.com/],
             @payload    = @payload,
             @timeout    = 120,
             @response   = @response OUTPUT;

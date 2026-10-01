@@ -13,7 +13,7 @@
       diagram claims. Learn: "Azure Private Link for Azure SQL Database."
 
     SCOPE — the private endpoint targets the LOGICAL SERVER (group-id sqlServer), so
-      it covers EVERY database on collierhealth-17: the wardgeneral primary AND a
+      it covers EVERY database on collierhealth-49889: the wardgeneral primary AND a
       same-server named replica (wardgeneral-research), if/when it is created. One
       endpoint, one DNS record, both databases. (A named replica placed on a
       SEPARATE logical server would need its own private endpoint.)
@@ -41,7 +41,7 @@
 [CmdletBinding()]
 param(
     [string] $Rg          = 'rg-collierhealth',
-    [string] $Server      = 'collierhealth-17',                # logical server (primary + same-server replica)
+    [string] $Server      = 'collierhealth-49889',                # logical server (primary + same-server replica)
     [string] $Loc         = 'centralus',                       # MUST match the server's region
     [string] $Vnet        = 'vnet-collierhealth',
     [string] $Subnet      = 'snet-sql',

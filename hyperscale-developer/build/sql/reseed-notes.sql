@@ -16,7 +16,7 @@
    RUN (passwordless, Entra token):
      $tk = (az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
      & '<kit>\sqlsimtools\sqlsim\build\x64\Release\sqlsim.exe' `
-         -S collierhealth-17.database.windows.net -d wardgeneral -T $tk -N s `
+         -S collierhealth-49889.database.windows.net -d wardgeneral -T $tk -N s `
          -i '<kit>\presentations\hyperscale-developer\build\sql\..\..\build\sql\reseed-notes.sql'
 
    THEN (async, resumable, safe in the background):

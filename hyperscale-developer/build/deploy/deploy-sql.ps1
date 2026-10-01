@@ -38,7 +38,7 @@
 param(
     [Parameter(Mandatory)]
     [string[]] $Scripts,
-    [string]   $Server   = ($env:WG_SERVER   ?? 'collierhealth-17.database.windows.net'),
+    [string]   $Server   = ($env:WG_SERVER   ?? 'collierhealth-49889.database.windows.net'),
     [string]   $Database = ($env:WG_DATABASE ?? 'wardgeneral'),
     [string]   $SqlDir,
     [string]   $SqlSim,

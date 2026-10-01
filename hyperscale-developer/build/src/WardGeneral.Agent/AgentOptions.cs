@@ -6,7 +6,7 @@ namespace WardGeneral.Agent;
 /// </summary>
 public sealed class AgentOptions
 {
-    /// <summary>Azure OpenAI endpoint hosting the chat model (e.g. https://collierhealth-ai.openai.azure.com/).</summary>
+    /// <summary>Azure OpenAI endpoint hosting the chat model (e.g. https://collierhealth-49889-ai.openai.azure.com/).</summary>
     public string Endpoint { get; set; } = "";
 
     /// <summary>Chat-model deployment name (a reasoning model, e.g. gpt-5).</summary>

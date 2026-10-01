@@ -14,7 +14,7 @@
         3. DB objects: sql/06 + sql/07 (+ sql/09 if -Gateway) then generate-embeddings.ps1
 
     What it does (all idempotent — "create if absent"; safe to re-run):
-      - Foundry (Azure OpenAI) account `collierhealth-ai` (kind=OpenAI, custom
+      - Foundry (Azure OpenAI) account `collierhealth-49889-ai` (kind=OpenAI, custom
         subdomain — required for Entra token auth). Created only if missing.
       - Model deployments: `gpt-5` and `text-embedding-3-large`, both
         GlobalStandard at capacity 100 (pinned so a fresh deploy never needs a
@@ -60,13 +60,15 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $SubscriptionId    = ($env:SUBSCRIPTION_ID ?? '0efc44aa-c965-420f-aac4-fff305dbcc97'),
+    [string] $SubscriptionId    = ($env:SUBSCRIPTION_ID ?? '88a1feda-07e6-4bf9-9d09-6ea5ec00b3bf'),
     [string] $ResourceGroup     = ($env:RG ?? 'rg-collierhealth'),
-    [string] $AiResourceName    = ($env:AI_RESOURCE ?? 'collierhealth-ai'),
+    [string] $AiResourceName    = ($env:AI_RESOURCE ?? 'collierhealth-49889-ai'),
     [string] $AiLocation        = ($env:AI_LOCATION ?? 'eastus2'),
-    [string] $SqlServerName     = ($env:SRV ?? 'collierhealth-17'),
+    [string] $SqlServerName     = ($env:SRV ?? 'collierhealth-49889'),
     [int]    $ChatCapacity      = 100,
+    [string] $ChatModelVersion  = ($env:CHAT_MODEL_VERSION ?? '2025-08-07'),
     [int]    $EmbeddingCapacity = 100,
+    [string] $ApimName          = ($env:APIM_NAME ?? 'collierhealth-49889-ai-gateway'),
     [switch] $Gateway,
     [switch] $ContentSafety,
     [switch] $SkipModels,
@@ -78,16 +80,16 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ($ContentSafety) { $Gateway = $true }   # content safety attaches to the gateway policy
 
 function Set-ModelDeployment {
-    param([string]$Name, [string]$ModelName, [int]$Capacity)
+    param([string]$Name, [string]$ModelName, [string]$ModelVersion, [int]$Capacity)
     $have = az cognitiveservices account deployment list -n $AiResourceName -g $ResourceGroup --query "[?name=='$Name'].name" -o tsv 2>$null
     if ($have) {
         Write-Host "  Deployment '$Name' exists." -ForegroundColor Green
         return
     }
-    Write-Host "  Creating deployment '$Name' ($ModelName, GlobalStandard capacity $Capacity)..." -ForegroundColor Gray
+    Write-Host "  Creating deployment '$Name' ($ModelName $ModelVersion, GlobalStandard capacity $Capacity)..." -ForegroundColor Gray
     az cognitiveservices account deployment create -n $AiResourceName -g $ResourceGroup `
         --deployment-name $Name --model-name $ModelName `
-        --model-version 1 --model-format OpenAI `
+        --model-version $ModelVersion --model-format OpenAI `
         --sku-name GlobalStandard --sku-capacity $Capacity --output none
     if ($LASTEXITCODE -ne 0) { throw "Failed to create deployment '$Name'." }
     Write-Host "  Deployment '$Name' created." -ForegroundColor Green
@@ -124,8 +126,10 @@ if ($SkipModels) {
     } else {
         Write-Host "  Foundry account '$AiResourceName' exists." -ForegroundColor Green
     }
-    Set-ModelDeployment -Name 'gpt-5'                 -ModelName 'gpt-5'                 -Capacity $ChatCapacity
-    Set-ModelDeployment -Name 'text-embedding-3-large' -ModelName 'text-embedding-3-large' -Capacity $EmbeddingCapacity
+    # gpt-5's model version is a date (2025-08-07), NOT '1' — passing '1' fails the
+    # deployment. text-embedding-3-large is version '1'.
+    Set-ModelDeployment -Name 'gpt-5'                 -ModelName 'gpt-5'                 -ModelVersion $ChatModelVersion -Capacity $ChatCapacity
+    Set-ModelDeployment -Name 'text-embedding-3-large' -ModelName 'text-embedding-3-large' -ModelVersion '1'               -Capacity $EmbeddingCapacity
 }
 Write-Host ''
 
@@ -185,5 +189,5 @@ if ($Gateway) {
     Write-Host '        run-ai-gateway-e2e.ps1 -SkipSetup   deploys 09 + verifies the gateway call' -ForegroundColor Gray
 }
 Write-Host ''
-Write-Host " Teardown (billable bits): az apim delete -n collierhealth-ai-gateway -g $ResourceGroup --yes --no-wait" -ForegroundColor Gray
+Write-Host " Teardown (billable bits): az apim delete -n $ApimName -g $ResourceGroup --yes --no-wait" -ForegroundColor Gray
 Write-Host '=============================================' -ForegroundColor Green

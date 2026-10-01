@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Puts an APIM StandardV2 instance between the wardgeneral database and the
-    gpt-5 chat deployment on collierhealth-ai. The clinical assistance
+    gpt-5 chat deployment on collierhealth-49889-ai. The clinical assistance
     proc (clinical.GenerateClinicalAssistance) doesn't change its logic —
     09-ai-gateway.sql just swaps the URL + credential it calls, so every AI
     interaction is now governed: token rate-limiting, token metrics, managed-
@@ -18,8 +18,8 @@
     version). Idempotent — safe to re-run; each step checks for existence.
 
     Components created:
-      - APIM StandardV2 instance (collierhealth-ai-gateway) + system MI
-      - MI granted "Cognitive Services OpenAI User" on collierhealth-ai
+      - APIM StandardV2 instance (collierhealth-49889-ai-gateway) + system MI
+      - MI granted "Cognitive Services OpenAI User" on collierhealth-49889-ai
       - gpt-5 backend -> the resource's own endpoint (<name>.openai.azure.com/openai)
       - azure-openai-api (subscription NOT required) with a chat-completions operation
       - Policies: validate-azure-ad-token (accept ONLY the wardgeneral server's
@@ -29,7 +29,7 @@
 
     Cost/time note: APIM StandardV2 is a real, always-on billable resource and
     provisioning takes ~30-45 minutes. Tear down after the talk with:
-      az apim delete -n collierhealth-ai-gateway -g rg-collierhealth --yes --no-wait
+      az apim delete -n collierhealth-49889-ai-gateway -g rg-collierhealth --yes --no-wait
 
     Fully passwordless: the database calls APIM with the SAME first-party managed-
     identity token the direct Foundry path uses (audience
@@ -45,14 +45,14 @@
 #>
 param(
     [switch] $Force,
-    [string] $SubscriptionId = '0efc44aa-c965-420f-aac4-fff305dbcc97',
+    [string] $SubscriptionId = '88a1feda-07e6-4bf9-9d09-6ea5ec00b3bf',
     [string] $ResourceGroup  = 'rg-collierhealth',
     [string] $Location       = 'centralus',
-    [string] $ApimName       = 'collierhealth-ai-gateway',
-    [string] $AiResourceName = 'collierhealth-ai',
-    [string] $PublisherEmail = 'bobward@microsoft.com',
+    [string] $ApimName       = 'collierhealth-49889-ai-gateway',
+    [string] $AiResourceName = 'collierhealth-49889-ai',
+    [string] $PublisherEmail = 'admin@mngenvmcap976054.onmicrosoft.com',
     [string] $PublisherName  = 'Collier Health',
-    [string] $SqlServerName   = 'collierhealth-17',
+    [string] $SqlServerName   = 'collierhealth-49889',
     # The DB->APIM hop authenticates with the SAME first-party token the direct Foundry
     # path uses (06/07) — no custom app registration, no Service Tree ID.
     [string] $TokenAudience   = 'https://cognitiveservices.azure.com'
@@ -261,7 +261,7 @@ Write-Host '  Operation created.' -ForegroundColor Green
 # Policy: accept ONLY the wardgeneral server's managed-identity token (validate-azure-ad-token),
 # route to gpt5-backend, auth to Azure OpenAI with APIM's managed identity, cap at 10K TPM, emit token metrics.
 $policyXml = @"
-<policies><inbound><base /><validate-azure-ad-token tenant-id="$tenantId"><client-application-ids><application-id>$sqlAppId</application-id></client-application-ids><audiences><audience>$TokenAudience</audience></audiences></validate-azure-ad-token><set-backend-service backend-id="gpt5-backend" /><authentication-managed-identity resource="https://cognitiveservices.azure.com" /><azure-openai-token-limit tokens-per-minute="10000" counter-key="wardgeneral-gpt5" estimate-prompt-tokens="true" tokens-consumed-header-name="x-tokens-consumed" remaining-tokens-header-name="x-tokens-remaining" /><azure-openai-emit-token-metric namespace="collierhealth-ai-gateway"><dimension name="API" value="@(context.Api.Name)" /><dimension name="Deployment" value="gpt-5" /><dimension name="Operation" value="ClinicalAssistance" /></azure-openai-emit-token-metric></inbound><backend><forward-request timeout="120" /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>
+<policies><inbound><base /><validate-azure-ad-token tenant-id="$tenantId"><client-application-ids><application-id>$sqlAppId</application-id></client-application-ids><audiences><audience>$TokenAudience</audience></audiences></validate-azure-ad-token><set-backend-service backend-id="gpt5-backend" /><authentication-managed-identity resource="https://cognitiveservices.azure.com" /><azure-openai-token-limit tokens-per-minute="10000" counter-key="wardgeneral-gpt5" estimate-prompt-tokens="true" tokens-consumed-header-name="x-tokens-consumed" remaining-tokens-header-name="x-tokens-remaining" /><azure-openai-emit-token-metric namespace="collierhealth-49889-ai-gateway"><dimension name="API" value="@(context.Api.Name)" /><dimension name="Deployment" value="gpt-5" /><dimension name="Operation" value="ClinicalAssistance" /></azure-openai-emit-token-metric></inbound><backend><forward-request timeout="120" /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>
 "@
 $result = Invoke-ApimRest -Method PUT -Path "apis/$apiId/policies/policy" -Body @{
     properties = @{ format = 'xml'; value = $policyXml }

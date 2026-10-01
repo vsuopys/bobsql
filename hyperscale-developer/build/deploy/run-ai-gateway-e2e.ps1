@@ -39,11 +39,11 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Server          = 'collierhealth-17.database.windows.net',
+    [string] $Server          = 'collierhealth-49889.database.windows.net',
     [string] $Database        = 'wardgeneral',
-    [string] $SqlServerName   = 'collierhealth-17',
+    [string] $SqlServerName   = 'collierhealth-49889',
     [int]    $EncounterId     = 1001,
-    [string] $SqlSim          = 'C:\bwsql\sqlsimtools\sqlsim\build\x64\Release\sqlsim.exe',
+    [string] $SqlSim          = (Join-Path $PSScriptRoot '..' '..' 'utilities' 'sqlsim' 'sqlsim.exe'),
     [switch] $ContentSafety,
     [switch] $SkipSetup,
     [switch] $Force

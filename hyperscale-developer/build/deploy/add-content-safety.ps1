@@ -3,7 +3,7 @@
     add-content-safety.ps1 : layer Azure AI Content Safety onto the gateway,
                              covering BOTH the prompt AND the completion.
 
-    collierhealth-ai is a kind=OpenAI account, which does NOT expose the
+    collierhealth-49889-ai is a kind=OpenAI account, which does NOT expose the
     Content Safety API. So this script stands up a dedicated Azure AI Content
     Safety resource (F0 = free tier), grants the gateway's managed identity
     "Cognitive Services User" on it, points a gateway backend at it, and
@@ -25,14 +25,14 @@
     Run AFTER setup-ai-gateway.ps1. Idempotent — safe to re-run.
 #>
 param(
-    [string] $SubscriptionId = '0efc44aa-c965-420f-aac4-fff305dbcc97',
+    [string] $SubscriptionId = '88a1feda-07e6-4bf9-9d09-6ea5ec00b3bf',
     [string] $ResourceGroup  = 'rg-collierhealth',
     [string] $Location       = 'centralus',
-    [string] $ApimName       = 'collierhealth-ai-gateway',
-    [string] $CsResourceName = 'collierhealth-contentsafety',   # dedicated kind=ContentSafety resource
+    [string] $ApimName       = 'collierhealth-49889-ai-gateway',
+    [string] $CsResourceName = 'collierhealth-49889-contentsafety',   # dedicated kind=ContentSafety resource
     [string] $CsSku          = 'F0',                            # F0 = free; S0 = pay-per-transaction
     [int]    $Threshold      = 2,                               # FourSeverityLevels: 0,2,4,6 (2 = strict)
-    [string] $SqlServerName  = 'collierhealth-17',              # its MI is the ONLY authorized caller
+    [string] $SqlServerName  = 'collierhealth-49889',              # its MI is the ONLY authorized caller
     [string] $TokenAudience  = 'https://cognitiveservices.azure.com'  # first-party audience (matches setup-ai-gateway.ps1)
 )
 
@@ -60,7 +60,7 @@ Write-Host '=== Adding Content Safety (input + output) to Ward General AI Gatewa
 Write-Host ''
 az account set --subscription $SubscriptionId | Out-Null
 
-# ── Step 1: dedicated Content Safety resource (collierhealth-ai is OpenAI-only) ──
+# ── Step 1: dedicated Content Safety resource (collierhealth-49889-ai is OpenAI-only) ──
 Write-Host "[1/4] Content Safety resource ($CsResourceName, $CsSku)..." -ForegroundColor Yellow
 $csExists = az cognitiveservices account show --name $CsResourceName --resource-group $ResourceGroup --query 'name' -o tsv 2>$null
 if ($csExists) {
@@ -109,7 +109,7 @@ if (-not $sqlPrincipalId) { Write-Host "  ERROR: $SqlServerName has no system-as
 $sqlAppId = az ad sp show --id $sqlPrincipalId --query appId -o tsv
 $t = $Threshold
 $policyXml = @"
-<policies><inbound><base /><validate-azure-ad-token tenant-id="$tenantId"><client-application-ids><application-id>$sqlAppId</application-id></client-application-ids><audiences><audience>$TokenAudience</audience></audiences></validate-azure-ad-token><set-backend-service backend-id="gpt5-backend" /><authentication-managed-identity resource="https://cognitiveservices.azure.com" /><llm-content-safety backend-id="contentsafety-backend" shield-prompt="true" enforce-on-completions="true"><categories output-type="FourSeverityLevels"><category name="Hate" threshold="$t" /><category name="Sexual" threshold="$t" /><category name="SelfHarm" threshold="$t" /><category name="Violence" threshold="$t" /></categories></llm-content-safety><azure-openai-token-limit tokens-per-minute="10000" counter-key="wardgeneral-gpt5" estimate-prompt-tokens="true" tokens-consumed-header-name="x-tokens-consumed" remaining-tokens-header-name="x-tokens-remaining" /><azure-openai-emit-token-metric namespace="collierhealth-ai-gateway"><dimension name="API" value="@(context.Api.Name)" /><dimension name="Deployment" value="gpt-5" /><dimension name="Operation" value="ClinicalAssistance" /></azure-openai-emit-token-metric></inbound><backend><forward-request timeout="120" /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>
+<policies><inbound><base /><validate-azure-ad-token tenant-id="$tenantId"><client-application-ids><application-id>$sqlAppId</application-id></client-application-ids><audiences><audience>$TokenAudience</audience></audiences></validate-azure-ad-token><set-backend-service backend-id="gpt5-backend" /><authentication-managed-identity resource="https://cognitiveservices.azure.com" /><llm-content-safety backend-id="contentsafety-backend" shield-prompt="true" enforce-on-completions="true"><categories output-type="FourSeverityLevels"><category name="Hate" threshold="$t" /><category name="Sexual" threshold="$t" /><category name="SelfHarm" threshold="$t" /><category name="Violence" threshold="$t" /></categories></llm-content-safety><azure-openai-token-limit tokens-per-minute="10000" counter-key="wardgeneral-gpt5" estimate-prompt-tokens="true" tokens-consumed-header-name="x-tokens-consumed" remaining-tokens-header-name="x-tokens-remaining" /><azure-openai-emit-token-metric namespace="collierhealth-49889-ai-gateway"><dimension name="API" value="@(context.Api.Name)" /><dimension name="Deployment" value="gpt-5" /><dimension name="Operation" value="ClinicalAssistance" /></azure-openai-emit-token-metric></inbound><backend><forward-request timeout="120" /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>
 "@
 Invoke-ApimRest -Method PUT -Path "apis/$apiId/policies/policy" -Body @{
     properties = @{ format = 'xml'; value = $policyXml }

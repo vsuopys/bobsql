@@ -19,9 +19,9 @@ with "unknown error"). sqlsim's token path is the reliable passwordless option.
 Run commands from `presentations/hyperscale-developer/`, or substitute the full path.
 
 ## Live talk environment
-- Server: `collierhealth-17.database.windows.net`
+- Server: `collierhealth-49889.database.windows.net`
 - Database: `wardgeneral` (Hyperscale HS_Gen5_8)
-- Auth: Microsoft Entra as `bobward@microsoft.com`
+- Auth: Microsoft Entra as `admin@mngenvmcap976054.onmicrosoft.com`
 
 ## Entra authentication (choose one)
 - `-T <token>` — Azure access token (most reliable; see example below)
@@ -34,16 +34,16 @@ Run commands from `presentations/hyperscale-developer/`, or substitute the full 
 ```powershell
 # Ad-hoc query against wardgeneral via Entra token (the reliable path)
 $token = (az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
-& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-17.database.windows.net -d wardgeneral -T $token -Q "SELECT @@VERSION"
+& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-49889.database.windows.net -d wardgeneral -T $token -Q "SELECT @@VERSION"
 
 # Deploy a schema/seed script (GO batch separators handled natively)
-& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-17.database.windows.net -d wardgeneral -T $token -i .\build\sql\05-seed.sql
+& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-49889.database.windows.net -d wardgeneral -T $token -i .\build\sql\05-seed.sql
 
 # Entra interactive (no token needed, pops a browser)
-& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-17.database.windows.net -d wardgeneral -A -Q "SELECT DB_NAME()"
+& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-49889.database.windows.net -d wardgeneral -A -Q "SELECT DB_NAME()"
 
 # Multi-threaded scale workload: 16 threads x 100 iterations, quiet, with server stats
-& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-17.database.windows.net -d wardgeneral -T $token -i .\workload.sql -n 16 -r 100 -q -querystats
+& '.\utilities\sqlsim\sqlsim.exe' -S collierhealth-49889.database.windows.net -d wardgeneral -T $token -i .\workload.sql -n 16 -r 100 -q -querystats
 ```
 
 ## Notes
