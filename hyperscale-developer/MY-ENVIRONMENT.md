@@ -5,9 +5,11 @@ in subscription **ME-MngEnvMCAP976054-demo-dev** (`88a1feda-07e6-4bf9-9d09-6ea5e
 tenant `e71d46fa-628e-4058-9b01-ed89333c0ae8`). All scripts in `build/` default to these names.
 Run the demo with [DEMO-RUNBOOK.md](DEMO-RUNBOOK.md).
 
-> **No secrets in this file.** The generated SQL admin password is stored only in
-> `hyperscale-developer/build/.env.local`, which git ignores. The server is **Entra-only**,
-> so the password isn't used for any login. It's kept in case Entra-only is ever relaxed.
+> **No secrets in this file. There is no usable SQL login.** The server is **Entra-only**
+> (required by an MCAPS policy). Sign in as `admin@mngenvmcap976054.onmicrosoft.com` with
+> Microsoft Entra MFA / `az login`. Azure created the server with an auto-generated, disabled
+> SQL admin (`CloudSA7688890b`). The `SQL_ADMIN_USER` / `SQL_ADMIN_PASSWORD` values in the
+> git-ignored `build/.env.local` were **never applied** to the server.
 
 ## Resources
 
