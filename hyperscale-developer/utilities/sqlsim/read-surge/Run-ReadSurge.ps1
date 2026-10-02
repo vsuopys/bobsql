@@ -58,7 +58,11 @@ try {
     Write-Host "Driving READ-ONLY surge at $Database on $Server for ~${secs}s..." -ForegroundColor Cyan
     Write-Host "  (Ctrl+C to stop early. Watch CPU on the primary, then pull the compute slider.)" -ForegroundColor DarkGray
 
-    $simArgs = @('-S', $Server, '-d', $Database, '-T', $token, '-N', 's', '-workload', $runJson, '-querystats')
+    # -l/-retry: under Global Secure Access / NAT a few of the ~38 parallel logins can
+    # stall forever with no timeout, and sqlsim waits for every thread to connect before
+    # driving load (looks like a hang at "Connecting..."). Time out and retry instead.
+    $simArgs = @('-S', $Server, '-d', $Database, '-T', $token, '-N', 's', '-workload', $runJson, '-querystats',
+                 '-l', '30', '-retry', '3', '-retrydelay', '2')
     $jsonOut = $null
     if ($Report) {
         $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'

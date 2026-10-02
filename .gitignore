@@ -292,3 +292,5 @@ hyperscale-developer/build/.env.local
 hyperscale-developer/build/**/*.log
 hyperscale-developer/build/deploy/diag-results.txt
 
+hyperscale-developer/utilities/sqlsim/read-surge/read-surge-2*.json
+hyperscale-developer/utilities/sqlsim/read-surge/read-surge-2*.html
